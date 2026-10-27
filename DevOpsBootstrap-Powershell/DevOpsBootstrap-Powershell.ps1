@@ -10,6 +10,8 @@ $resources = @(
     [pscustomobject]@{ Name = 'Terraform'; Id = 'Hashicorp.Terraform' }
     [pscustomobject]@{ Name = 'OpenCode';  Id = 'SST.opencode' }
     [pscustomobject]@{ Name = 'Codex';     Id = 'OpenAI.Codex' }
+    [pscustomobject]@{ Name = 'Neovim';    Id = 'Neovim.Neovim' }
+    [pscustomobject]@{ Name = 'Python 3.13'; Id = 'Python.Python.3.13' }
 )
 
 # Winget returns these codes for normal outcomes, even though they are nonzero.
@@ -64,7 +66,7 @@ function Install-Winget {
 }
 
 # 1. Make sure Winget is installed and can run.
-$totalSteps = $resources.Count + 1
+$totalSteps = $resources.Count + 2
 Write-Host "==> 1/$totalSteps Checking for Winget"
 
 $wingetCommand = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue
@@ -159,7 +161,80 @@ foreach ($resource in $resources) {
     }
 }
 
-# 3. Report whether every tool was processed successfully.
+# 3. Install or update yamllint with the Python version managed above.
+$step++
+Write-Host "==> $step/$totalSteps Checking yamllint"
+
+try {
+    # Read the install location directly: a newly installed Python may not be on PATH.
+    $pythonRegistryPaths = @(
+        'HKCU:\Software\Python\PythonCore\3.13\InstallPath'
+        'HKLM:\Software\Python\PythonCore\3.13\InstallPath'
+        'HKLM:\Software\WOW6432Node\Python\PythonCore\3.13\InstallPath'
+    )
+    $pythonPath = $null
+    foreach ($registryPath in $pythonRegistryPaths) {
+        $installation = Get-ItemProperty -LiteralPath $registryPath -ErrorAction SilentlyContinue
+        if ($installation -and $installation.ExecutablePath -and
+                (Test-Path -LiteralPath $installation.ExecutablePath)) {
+            $pythonPath = $installation.ExecutablePath
+            break
+        }
+    }
+
+    if (-not $pythonPath) {
+        if ($WhatIfPreference) {
+            Write-Host "`tPython 3.13 is unavailable; yamllint would be installed after Python."
+        } else {
+            throw 'Python 3.13 is unavailable. Check its installation result above and rerun the script.'
+        }
+    } elseif ($PSCmdlet.ShouldProcess('yamllint', 'Install or upgrade with Python 3.13 pip for the current user')) {
+        & $pythonPath -m pip --version
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Python 3.13 pip is unavailable. Repair the Python installation and rerun the script.'
+        }
+
+        & $pythonPath -m pip install --user --upgrade --disable-pip-version-check --no-input yamllint
+        if ($LASTEXITCODE -ne 0) {
+            throw "yamllint installation failed (exit code $LASTEXITCODE)."
+        }
+
+        & $pythonPath -m yamllint --version
+        if ($LASTEXITCODE -ne 0) {
+            throw 'yamllint was installed but could not run.'
+        }
+
+        # pip can satisfy the requirement from either the user or interpreter site.
+        $scriptsDirectories = & $pythonPath -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user')); print(sysconfig.get_path('scripts'))"
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not locate the Python scripts directories.'
+        }
+        $yamllintDirectory = $scriptsDirectories | Where-Object {
+            Test-Path -LiteralPath (Join-Path $_ 'yamllint.exe')
+        } | Select-Object -First 1
+
+        if (-not $yamllintDirectory) {
+            throw 'Could not find yamllint.exe after installation.'
+        }
+
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $userPathEntries = @($userPath -split ';' | Where-Object { $_ })
+        if ($userPathEntries -notcontains $yamllintDirectory) {
+            if ($PSCmdlet.ShouldProcess('User PATH', "Add $yamllintDirectory")) {
+                $updatedUserPath = ($userPathEntries + $yamllintDirectory) -join ';'
+                [Environment]::SetEnvironmentVariable('Path', $updatedUserPath, 'User')
+                $env:Path = "$env:Path;$yamllintDirectory"
+            }
+        } elseif (($env:Path -split ';') -notcontains $yamllintDirectory) {
+            $env:Path = "$env:Path;$yamllintDirectory"
+        }
+    }
+} catch {
+    $failedResources += 'yamllint'
+    Write-Warning "yamllint: $($_.Exception.Message)"
+}
+
+# 4. Report whether every tool was processed successfully.
 if ($failedResources.Count -gt 0) {
     throw "Bootstrap failed for: $($failedResources -join ', '). See the warnings above."
 }
