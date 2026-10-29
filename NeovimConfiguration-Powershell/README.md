@@ -1,7 +1,9 @@
 # Neovim configuration bootstrap for Windows
 
 `NeovimConfiguration.ps1` installs Neovim when absent and deploys a locked plugin
-foundation. It supports Windows x64, 64-bit Windows PowerShell 5.1 or later, and
+foundation and the [Phase 2 language configuration](LanguagePlugins.md) for YAML,
+Azure Pipelines, Terraform, PowerShell, Bash, and JSON/JSONC. It supports Windows x64,
+64-bit Windows PowerShell 5.1 or later, and
 Neovim **0.12.6**. Other releases require a reviewed compatibility-baseline change.
 
 Start with either no Neovim installation or Neovim without a plugin configuration.
@@ -64,21 +66,22 @@ Plugin sources are downloaded over HTTPS from the GitHub repositories listed in
 project-local `.lazy.lua` specifications, LuaRocks resolution, Rust builds, or
 Blink binary downloads. The script refuses to overwrite modified managed checkouts.
 
-The C compiler, Tree-sitter CLI, parser installation, Node.js, Python, Rust,
-language servers, formatters, and linters are deferred. The selected Treesitter
-revision initializes without compiler/CLI tools; its installation and update
-commands require additional tooling in a later phase.
+Language prerequisites (Node.js/npm, PowerShell 7, Terraform CLI, Tree-sitter CLI,
+and Clang with a Windows SDK) are installed separately. Versions and installation
+instructions are in [LanguagePlugins.md](LanguagePlugins.md). After deployment,
+run `:BootstrapInstallTools` explicitly to download pinned Mason tools and compile
+parsers, then restart Neovim. Startup and `-WhatIf` never install language tools.
 
 ## Included behavior
 
 All eleven requested plugins are included, with plenary.nvim and nui.nvim as
-Neo-tree dependencies. Mason and Mason-LSPConfig initialize with empty registries,
-no language-tool installations, and automatic server enabling disabled. `:Mason`
-has no package catalog in Phase 1; registry setup belongs with later language
-tooling. Conform and nvim-lint have no configured external tools or automatic
-format/lint triggers. Treesitter does not install or update parsers.
+Neo-tree dependencies and a pinned SchemaStore catalog. Mason has an explicit,
+pinned registry; automatic installation and automatic server enabling remain
+disabled. The configuration explicitly enables available servers. Conform provides
+manual formatting; TFLint runs on Terraform read/save, and Treesitter highlights
+supported buffers after parsers have been provisioned.
 
-Blink supplies buffer/path completion and Neovim's snippet expansion infrastructure,
+Blink supplies LSP/buffer/path completion and Neovim's snippet expansion infrastructure,
 using its Lua matcher. No snippet collection is included. Neo-tree uses fallback
 symbols without requiring a Nerd Font. Gitsigns and autopairs use their normal
 basic behavior. No theme or font is installed.
@@ -92,9 +95,10 @@ basic behavior. No theme or font is installed.
 | `Space rn`, `Space ca` | Rename and code actions, after an LSP attaches |
 | `Ctrl-Space`, `Ctrl-n` / `Ctrl-p`, `Ctrl-y` | Open completion, select, accept (Blink default preset) |
 
-Phase 1 does not provide functioning language servers, external formatting,
-linting, or newly installed syntax parsers. LSP mappings become available only
-when language tooling is configured later.
+Language features require successful provisioning. General YAML and Azure files
+use mutually exclusive servers; project-specific pipeline/template globs are
+documented in [LanguagePlugins.md](LanguagePlugins.md). PowerShell uses its LSP
+formatter with `Space f`; all other selected languages use Conform's external tools.
 
 ## Backups, repeats, and recovery
 
@@ -141,6 +145,6 @@ acceptance testing before release.
 .\support\Test-Bootstrap.ps1 -PluginSource C:\path\to\locked-checkouts
 ```
 
-The optional source directory must contain all thirteen repository checkouts named
+The optional source directory must contain all fourteen repository checkouts named
 as in the lockfile. Integration checks simulate package presence and copy those
 checkouts; they never install software or touch the default editor profile.

@@ -1,4 +1,53 @@
-# Phase 1 validation record
+# Phase 2 validation record
+
+Date: 2026-10-29. Baseline: `phase2-2026-10-29`.
+
+Phase 2 retains the deployment/recovery checks recorded below. New validation
+includes rejection of executable shared-runtime directories and detection files (including the
+reported `site/ftplugin/lua.lua` case), Lua/PowerShell syntax parsing, JSON
+manifest parsing, and a real default-profile read-only `-WhatIf` preview. The
+locked SchemaStore checkout was downloaded only into `.validation`; no system
+packages, language packages, or default editor configuration were installed.
+
+Final results: all **24** scenarios in `Test-Bootstrap.ps1 -PluginSource
+.validation/upstream` passed, including the expanded offline editor checks.
+The dependency-free suite passed all **16** scenarios separately. Lua and
+PowerShell syntax, JSON parsing, `git diff --check`, and the default-profile
+`-WhatIf` preview also passed.
+
+The isolated editor harness now checks general YAML, pipeline entry points,
+pipeline templates, and project-specific filename/template rules. It invokes
+both real configured `root_dir` callbacks and requires exactly the intended
+one to accept each buffer. It also checks Azure schema associations, disabled
+YAML built-in catalog integration, all six Blink LSP capabilities, absence of
+duplicate Bash format/lint routes, and the actual `Space f` shortcut's PowerShell
+LSP fallback. These are configuration contracts, not running-server tests.
+
+An initial routing test exposed an invalid Neovim glob (`**.yml`); patterns now
+use `**/*.yml`. New registry/package pins preserve upstream `v` prefixes for
+GitHub release assets. All config files participate in deployment identity so
+language settings, provisioning code, and tool pins retain separate rollback
+dependencies.
+
+Read-only Winget queries found Node.js LTS 26.13.0, PowerShell package 7.6.9.0,
+Terraform 1.16.6, Tree-sitter CLI 0.27.1, and LLVM 23.1.4. SchemaStore HEAD and
+the Mason registry release tag were resolved remotely. Version discovery is
+not installation acceptance. This host currently has Node.js 24.18.0, no
+`pwsh.exe`, Clang, or Tree-sitter CLI on PATH, and a Terraform Winget link that
+fails to launch. Accordingly, prerequisite execution, language downloads,
+compiler/SDK compatibility, and running-server acceptance remain pending.
+
+`support/Test-Languages.ps1` provides a separate isolated acceptance runner for
+an already provisioned configuration. It covers server attachment, completion
+requests, syntax diagnostics, formatter completion, parser/highlighter behavior
+(including JSONC comments and HCL), Azure template navigation, and YAML server
+exclusivity. This runner has been syntax checked but not executed against real
+language tools here. Schema suggestion quality and invalid-property validation,
+TFLint warnings, ShellCheck integration, PSScriptAnalyzer findings, and interactive
+rendering require the acceptance checks described in `LanguagePlugins.md`.
+No end-to-end language compatibility claim is made before those checks pass.
+
+## Historical Phase 1 validation
 
 Date: 2026-10-29. Baseline: `phase1-2026-10-29`.
 

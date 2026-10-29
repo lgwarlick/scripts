@@ -268,7 +268,10 @@ function Assert-UnmanagedRuntime {
     param([string]$Data)
     # Native packages can load even without init.lua. Treat those as an existing
     # plugin setup too; preserve ordinary caches and unused shared checkouts.
-    foreach ($relative in @('site\pack', 'site\plugin', 'site\ftdetect', 'site\after')) {
+    foreach ($relative in @('site\pack', 'site\plugin', 'site\ftdetect', 'site\after',
+        'site\ftplugin', 'site\indent', 'site\syntax', 'site\autoload', 'site\lua', 'site\compiler',
+        'site\colors', 'site\keymap', 'site\lsp', 'site\rplugin', 'site\parser', 'site\queries',
+        'site\filetype.lua', 'site\filetype.vim', 'site\scripts.vim')) {
         $path = Join-Path $Data $relative
         Assert-SafePath $path
         if (Test-Path -LiteralPath $path) { throw "Existing native plugin runtime is outside Phase 1: $path" }
@@ -282,7 +285,7 @@ function Assert-PluginBaseline {
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw "Unowned plugin directory: $PluginRoot" }
     $owner = Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($owner.owner -ne 'NeovimConfiguration-Powershell' -or $owner.identity -ne $Identity) { throw "Plugin directory belongs to another baseline: $PluginRoot" }
-    $expected = @('.bootstrap-owner.json') + @($Manifest.plugins.PSObject.Properties.Name)
+    $expected = @('.bootstrap-owner.json', 'tools', 'parsers') + @($Manifest.plugins.PSObject.Properties.Name)
     foreach ($item in Get-ChildItem -LiteralPath $PluginRoot -Force) {
         if ($item.Name -notin $expected) { throw "Unrecognized managed artifact: $($item.FullName)" }
     }
@@ -451,10 +454,10 @@ function Invoke-NeovimBootstrap {
     $control = Join-Path $parent "$leaf.bootstrap-control"
     $managedRoot = Join-Path $paths.data 'neovim-bootstrap'
     # Config and manifest changes get a fresh plugin directory, preserving rollback dependencies.
-    $identityText = (Get-FileDigest (Join-Path $PSScriptRoot 'compatibility\baseline.json')) +
-        (Get-FileDigest (Join-Path $PSScriptRoot 'config\lazy-lock.json')) +
-        (Get-FileDigest (Join-Path $PSScriptRoot 'config\plugins.lua')) +
-        (Get-FileDigest (Join-Path $PSScriptRoot 'config\init.lua'))
+    $identityText = (Get-FileDigest (Join-Path $PSScriptRoot 'compatibility\baseline.json'))
+    foreach ($source in (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'config') -File -Recurse | Sort-Object FullName)) {
+        $identityText += $source.Name + (Get-FileDigest $source.FullName)
+    }
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $identity = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($identityText)))).Replace('-', '').ToLowerInvariant() }
     finally { $sha.Dispose() }
@@ -591,7 +594,7 @@ function Invoke-NeovimBootstrap {
         Save-Transaction $journal $transaction
         [IO.File]::Delete($journal)
         $transaction = $null
-        Write-Host 'Neovim configuration and locked plugins installed; startup verified. Language tools and parsers are deferred.'
+        Write-Host 'Neovim configuration and locked plugins installed; startup verified. See LanguagePlugins.md, then run :BootstrapInstallTools for pinned language tools and parsers.'
     } catch {
         $failure = $_
         if ($transaction -and (Test-Path -LiteralPath $journal)) {

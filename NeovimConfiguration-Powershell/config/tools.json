@@ -1,0 +1,23 @@
+{
+  "registry": "github:mason-org/mason-registry@2026-10-29-sick-rayon",
+  "prerequisites": [
+    { "Name": "Node.js LTS", "Id": "OpenJS.NodeJS.LTS", "Version": "26.13.0", "command": "node", "args": ["--version"] },
+    { "Name": "PowerShell 7", "Id": "Microsoft.PowerShell", "Version": "7.6.9", "command": "pwsh.exe", "args": ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"] },
+    { "Name": "Terraform CLI", "Id": "Hashicorp.Terraform", "Version": "1.16.6", "command": "terraform", "args": ["version"] },
+    { "Name": "Tree-sitter CLI", "Id": "tree-sitter.tree-sitter-cli", "Version": "0.27.1", "command": "tree-sitter", "args": ["--version"] },
+    { "Name": "LLVM Clang", "Id": "LLVM.LLVM", "Version": "23.1.4", "command": "clang", "args": ["--version"] }
+  ],
+  "packages": {
+    "yaml-language-server": "1.25.0",
+    "azure-pipelines-language-server": "0.9.0",
+    "terraform-ls": "v0.39.0",
+    "powershell-editor-services": "v4.7.0",
+    "bash-language-server": "5.8.1",
+    "json-lsp": "4.10.0",
+    "prettier": "3.9.10",
+    "tflint": "v0.63.1",
+    "shfmt": "v3.14.1",
+    "shellcheck": "v0.11.0"
+  },
+  "parsers": ["yaml", "terraform", "hcl", "powershell", "bash", "json"]
+}
