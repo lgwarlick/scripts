@@ -3,7 +3,7 @@
 .SYNOPSIS
 Validates deployment safety in disposable workspace directories without installing packages.
 .PARAMETER PluginSource
-Optional directory of the thirteen Git checkouts at config/lazy-lock.json revisions.
+Optional directory of the fourteen Git checkouts at config/lazy-lock.json revisions.
 Enables real isolated Neovim startup and deployment checks; no downloads are made.
 #>
 [CmdletBinding()]
@@ -65,6 +65,22 @@ function Restore-TestTransaction {
 }
 
 try {
+    Test-Scenario 'executable shared runtime directories are refused without executing them' {
+        foreach ($name in @('pack', 'plugin', 'ftdetect', 'after', 'ftplugin', 'indent', 'syntax', 'autoload', 'lua', 'compiler',
+            'colors', 'keymap', 'lsp', 'rplugin', 'parser', 'queries')) {
+            $data = Join-Path $testRoot ('runtime-' + $name)
+            $runtime = Join-Path $data ('site\' + $name)
+            [IO.Directory]::CreateDirectory($runtime) | Out-Null
+            [IO.File]::WriteAllText((Join-Path $runtime 'lua.lua'), 'error("must never execute")')
+            Assert-Failure { Assert-UnmanagedRuntime $data } 'Existing native plugin runtime'
+        }
+        foreach ($name in @('filetype.lua', 'filetype.vim', 'scripts.vim')) {
+            $data = Join-Path $testRoot ('runtime-file-' + $name)
+            [IO.Directory]::CreateDirectory((Join-Path $data 'site')) | Out-Null
+            [IO.File]::WriteAllText((Join-Path $data ('site\' + $name)), 'must never execute')
+            Assert-Failure { Assert-UnmanagedRuntime $data } 'Existing native plugin runtime'
+        }
+    }
     Test-Scenario 'Windows PowerShell syntax' {
         foreach ($file in @((Join-Path $repository 'NeovimConfiguration.ps1'), $PSCommandPath)) {
             $tokens = $null

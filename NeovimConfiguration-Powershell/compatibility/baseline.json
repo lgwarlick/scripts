@@ -1,14 +1,16 @@
 {
   "schema": 1,
-  "baseline": "phase1-2026-10-29",
+  "baseline": "phase2-2026-10-29",
   "architecture": "AMD64",
   "reviewed": "2026-10-29",
+  "languageTools": "config/tools.json",
   "neovim": { "version": "0.12.6", "minimum": "0.12.6", "maximumExclusive": "0.12.7", "id": "Neovim.Neovim" },
   "packages": [
     { "Name": "Git for Windows (includes GNU tar and curl)", "Id": "Git.Git", "Version": "2.56.0.3", "Minimum": "2.19.0" },
     { "Name": "7-Zip (Mason archive support)", "Id": "7zip.7zip", "Version": "26.05", "Minimum": "19.0" }
   ],
   "plugins": {
+    "SchemaStore.nvim": "b0o/SchemaStore.nvim",
     "lazy.nvim": "folke/lazy.nvim",
     "nvim-lspconfig": "neovim/nvim-lspconfig",
     "mason.nvim": "mason-org/mason.nvim",
@@ -24,6 +26,11 @@
     "nui.nvim": "MunifTanjim/nui.nvim"
   },
   "sources": [
+    "https://github.com/b0o/SchemaStore.nvim",
+    "https://github.com/mason-org/mason-registry/releases/tag/2026-10-29-sick-rayon",
+    "https://github.com/bash-lsp/bash-language-server",
+    "https://github.com/stevearc/conform.nvim",
+    "https://github.com/PowerShell/PowerShellEditorServices",
     "https://github.com/neovim/neovim/releases/tag/v0.12.6",
     "https://github.com/neovim/nvim-lspconfig#install",
     "https://github.com/mason-org/mason-lspconfig.nvim#requirements",

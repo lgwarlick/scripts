@@ -7,6 +7,8 @@ local function contains(items, label)
 end
 
 return function()
+    local config = vim.fs.dirname(vim.env.NVIM_BOOTSTRAP_EDITOR_TEST)
+    dofile(config .. "/Test-LanguageConfig.lua")(vim.g.neovim_bootstrap_config)
     local project = vim.fn.getcwd()
     -- Stop Git discovery before it reaches the repository containing these fixtures.
     vim.env.GIT_CEILING_DIRECTORIES = vim.fs.dirname(project)
