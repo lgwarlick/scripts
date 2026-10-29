@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "baseline": "phase1-2026-10-29",
+  "architecture": "AMD64",
+  "reviewed": "2026-10-29",
+  "neovim": { "version": "0.12.6", "minimum": "0.12.6", "maximumExclusive": "0.12.7", "id": "Neovim.Neovim" },
+  "packages": [
+    { "Name": "Git for Windows (includes GNU tar and curl)", "Id": "Git.Git", "Version": "2.56.0.3", "Minimum": "2.19.0" },
+    { "Name": "7-Zip (Mason archive support)", "Id": "7zip.7zip", "Version": "26.05", "Minimum": "19.0" }
+  ],
+  "plugins": {
+    "lazy.nvim": "folke/lazy.nvim",
+    "nvim-lspconfig": "neovim/nvim-lspconfig",
+    "mason.nvim": "mason-org/mason.nvim",
+    "mason-lspconfig.nvim": "mason-org/mason-lspconfig.nvim",
+    "conform.nvim": "stevearc/conform.nvim",
+    "nvim-treesitter": "nvim-treesitter/nvim-treesitter",
+    "blink.cmp": "saghen/blink.cmp",
+    "neo-tree.nvim": "nvim-neo-tree/neo-tree.nvim",
+    "gitsigns.nvim": "lewis6991/gitsigns.nvim",
+    "nvim-autopairs": "windwp/nvim-autopairs",
+    "nvim-lint": "mfussenegger/nvim-lint",
+    "plenary.nvim": "nvim-lua/plenary.nvim",
+    "nui.nvim": "MunifTanjim/nui.nvim"
+  },
+  "sources": [
+    "https://github.com/neovim/neovim/releases/tag/v0.12.6",
+    "https://github.com/neovim/nvim-lspconfig#install",
+    "https://github.com/mason-org/mason-lspconfig.nvim#requirements",
+    "https://github.com/mason-org/mason.nvim#requirements",
+    "https://github.com/nvim-treesitter/nvim-treesitter#requirements",
+    "https://cmp.saghen.dev/installation",
+    "https://cmp.saghen.dev/configuration/snippets",
+    "https://github.com/nvim-neo-tree/neo-tree.nvim#installation",
+    "https://lazy.folke.io/configuration",
+    "https://github.com/microsoft/winget-pkgs/tree/master/manifests/n/Neovim/Neovim/0.12.6",
+    "https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/Git/Git/2.56.0.3",
+    "https://github.com/microsoft/winget-pkgs/tree/master/manifests/7/7zip/7zip/26.05"
+  ]
+}
