@@ -22,7 +22,8 @@ function Invoke-NativeCommand {
     param(
         [string]$FilePath,
         [string[]]$Arguments = @(),
-        [int]$TimeoutSeconds = 120,
+        # Process/task wait APIs require milliseconds to fit a signed 32-bit integer.
+        [ValidateRange(1, 2147483)][int]$TimeoutSeconds = 120,
         [hashtable]$Environment = @{},
         [string]$WorkingDirectory = $PSScriptRoot,
         [switch]$AllowFailure
@@ -50,14 +51,42 @@ function Invoke-NativeCommand {
     }
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $start
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $timeoutMilliseconds = $TimeoutSeconds * 1000
     try {
         if (-not $process.Start()) { throw "Could not start $FilePath" }
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            # Stop children too, so download processes cannot outlive rollback.
-            try { & "$env:SystemRoot\System32\taskkill.exe" /PID $process.Id /T /F 2>&1 | Out-Null }
-            catch { if (-not $process.HasExited) { $process.Kill() } }
+        $remainingMilliseconds = [int][Math]::Max(0, $timeoutMilliseconds - $timer.ElapsedMilliseconds)
+        $completed = $process.WaitForExit($remainingMilliseconds)
+        if ($completed) {
+            # An exited parent may leave descendants holding either output pipe.
+            foreach ($reader in @($stdout, $stderr)) {
+                $remainingMilliseconds = [int][Math]::Max(0, $timeoutMilliseconds - $timer.ElapsedMilliseconds)
+                if (-not $reader.Wait($remainingMilliseconds)) { $completed = $false; break }
+            }
+        }
+        if (-not $completed) {
+            # Best effort only: an exited parent can no longer identify its descendants.
+            if (-not $process.HasExited) {
+                $stopStart = New-Object Diagnostics.ProcessStartInfo
+                $stopStart.FileName = "$env:SystemRoot\System32\taskkill.exe"
+                $stopStart.Arguments = "/PID $($process.Id) /T /F"
+                $stopStart.UseShellExecute = $false
+                $stopStart.CreateNoWindow = $true
+                $stopProcess = New-Object Diagnostics.Process
+                $stopProcess.StartInfo = $stopStart
+                try {
+                    if ($stopProcess.Start()) {
+                        if (-not $stopProcess.WaitForExit(1000)) { $stopProcess.Kill() }
+                    }
+                } catch { Write-Verbose "Could not terminate native process tree: $_" }
+                finally { $stopProcess.Dispose() }
+                if (-not $process.HasExited) {
+                    try { $process.Kill() }
+                    catch { Write-Verbose "Could not terminate native process: $_" }
+                }
+            }
             throw "Timed out after $TimeoutSeconds seconds: $FilePath"
         }
         $result = [pscustomobject]@{
@@ -69,7 +98,10 @@ function Invoke-NativeCommand {
             throw "$FilePath failed (exit $($result.ExitCode)). $($result.Error) $($result.Output)"
         }
         return $result
-    } finally { $process.Dispose() }
+    } finally {
+        $timer.Stop()
+        $process.Dispose()
+    }
 }
 
 function Get-AbsolutePath {
@@ -266,12 +298,17 @@ function Assert-SupportedConfiguration {
 
 function Assert-UnmanagedRuntime {
     param([string]$Data)
-    # Native packages can load even without init.lua. Treat those as an existing
-    # plugin setup too; preserve ordinary caches and unused shared checkouts.
-    foreach ($relative in @('site\pack', 'site\plugin', 'site\ftdetect', 'site\after')) {
-        $path = Join-Path $Data $relative
+    # Runtime code and parsers can load after startup when a buffer is opened.
+    # Reject standard runtime directories, while preserving caches/shared checkouts.
+    $runtimeDirectories = @('pack', 'plugin', 'ftdetect', 'after', 'ftplugin',
+        'autoload', 'lua', 'indent', 'syntax', 'compiler', 'colors', 'keymap',
+        'parser', 'queries', 'spell')
+    foreach ($directory in $runtimeDirectories) {
+        $path = Join-Path $Data "site\$directory"
         Assert-SafePath $path
-        if (Test-Path -LiteralPath $path) { throw "Existing native plugin runtime is outside Phase 1: $path" }
+        if (Test-Path -LiteralPath $path) {
+            throw "Existing native plugin runtime is outside Phase 1: $path. Move it aside manually before deploying."
+        }
     }
 }
 

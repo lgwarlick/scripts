@@ -1,15 +1,23 @@
 # Phase 3: Migrate regression tests to Pester
 
+Status: completed on 2026-10-29. Final public-runner acceptance passed on Windows
+PowerShell 5.1: 28 default tests and 36 tests with locked sources, with no failures
+or skipped cases. Production/configuration/lock hashes and the default profile
+remain unchanged from the starting working copy.
+See [assertion parity](compatibility/PHASE3-PARITY.md) and the separate
+[execution record](compatibility/PHASE3-VALIDATION.md).
+
 ## Goal and boundaries
 
 Replace the custom PowerShell test runner and assertions with Pester while
 preserving every existing assertion, failure injection, real subprocess check,
-and Lua integration check. This document is a plan; it does not implement the
-migration or change bootstrap behavior.
+and Lua integration check. Migration status and execution evidence are recorded
+below; production bootstrap behavior remains unchanged.
 
-The current harness contains 15 default scenarios and eight additional scenarios
-enabled by `-PluginSource`, for 23 total. The default suite already requires
-Neovim for argument quoting and preview checks; it is not a pure unit-test suite.
+After [Phase 2b](Phase2b.md), the original harness contained 17 default scenarios and
+eight additional scenarios enabled by `-PluginSource`, for 25 total. The default
+suite requires Neovim for argument quoting and preview checks; it is not
+a pure unit-test suite.
 Pester must remain a development dependency, never a bootstrap runtime dependency.
 Keep Windows x64 and Windows PowerShell 5.1 as the acceptance environment.
 
@@ -25,20 +33,31 @@ See the [versioned module manifest](https://raw.githubusercontent.com/pester/Pes
   optional `-PluginSource` parameter. Convert it into a thin runner that imports
   Pester, selects suites, supplies container data, and returns a nonzero process
   exit code for failed tests, discovery/setup errors, or missing prerequisites.
-- Add `support/Bootstrap.Safety.Tests.ps1` for the 15 default scenarios and
+- Add `support/Bootstrap.Safety.Tests.ps1` for the 17 default scenarios and
   `support/Bootstrap.Integration.Tests.ps1` for the eight source-dependent
   scenarios. Use descriptive `Describe`, `Context`, and `It` blocks with stable
-  scenario IDs from the inventory below. Helpers belong under `support` and must
-  contain fixture construction only, not replacement copies of production logic.
+  scenario IDs from the inventory below. Fixture helpers belong under `support`
+  and contain fixture construction/setup/teardown only. Keep runner/executor
+  helpers separate; neither may contain replacement copies of production logic.
+- Add a separate runner contract suite, selected in both modes. Its eleven cases
+  cover passing/failing assertions, setup/discovery errors, missing/empty/skipped
+  or partial selections, environment restoration after failure, literal source
+  arguments/exit forwarding, and missing pinned Pester. These supplement the
+  original 25 scenarios: default selection has 28 tests, full selection has 36.
 - Without `-PluginSource`, run the safety suite and explicitly report that the
   integration suite was not selected. With it, run both suites and require all
   thirteen checkouts at the committed locks. Invalid or missing prerequisites
   must fail an explicitly requested suite rather than turn it into skipped tests.
 - Retain the current README invocation forms. Produce console results and an
   NUnit XML report beneath the ignored `.validation` directory. Check the Pester
-  result object for failures and zero executed tests; do not rely on printed PASS
-  messages as evidence of success.
-- Run suites sequentially in a fresh PowerShell process. Dot-source the bootstrap
+  result object for failures and zero executed tests. Require every selected
+  scenario ID to execute and pass, rejecting missing, skipped, or incomplete
+  scenarios even when other tests pass. Do not rely on printed PASS messages.
+- The public runner launches a fresh 64-bit Windows PowerShell 5.1 process with
+  `-NoProfile`, forwards `-PluginSource` as a literal argument, and propagates the
+  child exit code. Use a separate internal worker to avoid recursive launching;
+  direct README invocations must provide the same isolation as CI.
+  Run suites sequentially in that process. Dot-source the bootstrap
   in `BeforeAll` without invoking its deployment entry point. Put filesystem and
   process work in setup/test/teardown blocks, never in Pester discovery code.
   Follow [Pester v5 test structure](https://pester.dev/docs/v5/usage/test-file-structure).
@@ -53,7 +72,7 @@ not proof of equivalent coverage.
 | ID | Suite | Required behavior |
 | --- | --- | --- |
 | S01 | Safety | Parse the bootstrap, runner, new PowerShell tests, and helpers using the Windows PowerShell parser. |
-| S02 | Safety | Real subprocess failure throws; `-AllowFailure` preserves exit code 7; a real timeout throws. |
+| S02 | Safety | Preserve successful native exit and exact stdout/stderr; real failure throws; `-AllowFailure` preserves exit code 7; a real process timeout throws. |
 | S03 | Safety | Real Neovim argv round trip preserves spaces, quotes, trailing backslashes, dollar expressions, backticks, and empty arguments. |
 | S04 | Safety | Reject overlapping deployment paths and drive roots. |
 | S05 | Safety | Equal inventories match; additional files and empty directories count as differences. |
@@ -67,11 +86,13 @@ not proof of equivalent coverage.
 | S13 | Safety | A real exclusive profile lock prevents a second writer. |
 | S14 | Safety | Reject a real junction without traversing or changing its target. |
 | S15 | Safety | Real child-process `-WhatIf` creates no artifacts, preserves inventories, suppresses hostile VIMINIT/EXINIT, and explains unchecked work. |
+| S16 | Safety | Reject all fifteen guarded unmanaged runtime directories without executing or changing their contents; reject a runtime junction without changing its target; accept missing/empty site and unused shared checkouts. |
+| S17 | Safety | A real parent exits while its child holds inherited output pipes; a five-second native timeout still throws with `-AllowFailure` and returns within eight seconds; verify parent exit and clean up the fixture child. |
 | I01 | Integration | Declined deployment preserves plain settings. |
 | I02 | Integration | Full locked deployment over plain settings succeeds with spaces and Unicode paths and retains one backup. |
-| I03 | Integration | A second deployment preserves configuration and lock contents, plugin revisions, backup count, and avoids repeated source preparation. |
+| I03 | Integration | A second deployment preserves inventory counts, exact path sets and hashes (including locks), each plugin's before/after and locked revision, backup count, and source-preparation count. |
 | I04 | Integration | Real offline editor checks cover tree opening, no-formatter notice, diagnostics shortcut, pairing, buffer/path completion, snippets, Git signs inside/outside repositories, and ignored project-local `.lazy.lua`. |
-| I05 | Integration | Injected live-verification failure restores modified settings and user files and retains the backup. |
+| I05 | Integration | Injected live-verification failure restores complete inventories, including modified settings, user files, and empty directories; retain all prior backups and exactly one new backup matching the original configuration, retain the failed candidate and its metadata, and clear the journal. |
 | I06 | Integration | Modified managed checkout is rejected before configuration replacement and user files remain intact. |
 | I07 | Integration | Injected verification failure on a clean first deployment leaves no failed configuration active. |
 | I08 | Integration | Simulated absent Neovim requests the exact manifest package/version and install action, then performs a real clean-profile deployment. |
@@ -99,7 +120,12 @@ these checks with mocked successful startup.
   Restore them in teardown even after failures, and dispose locks in `finally`.
   Ensure deployment tests use isolated XDG homes before invoking production code.
 - Replace `Assert-Condition` and `Assert-Failure` with Pester assertions, preserving
-  case-sensitive comparisons and expected exception messages. Replace manual
+  case-sensitive comparisons and expected exception messages. Preserve regex
+  exception matching with `Should -Throw -PassThru` followed by `Should -Match`;
+  Pester's `-ExpectedMessage` uses wildcard matching, so existing regex patterns
+  cannot be copied into that parameter. Use `Should -BeExactly` for direct exact
+  string assertions; retained compound boolean assertions preserve `-ceq`/`-cne`.
+  Replace manual
   function redefinitions with scoped `Mock` calls and parameter-filtered
   `Should -Invoke` checks; see [Pester v5 mocking](https://pester.dev/docs/v5/usage/mocking).
 - Preserve current mock boundaries: block real package changes; simulate package
@@ -108,27 +134,48 @@ these checks with mocked successful startup.
   configuration-check scriptblocks before mocking so all other invocations remain
   real. Keep Git identity/status checks, directory renames, journals, rollback,
   Neovim startup, and Lua assertions real.
+- Before porting the full integration suite, prove scoped mocks can block package
+  changes, delegate ordinary native commands and verification to captured real
+  scriptblocks, and inject only the intended failure under PowerShell 5.1 strict
+  mode. Keep setup calls separate from test-action call-count assertions.
+- Disable commit signing explicitly for the editor's local Git fixture, alongside
+  its temporary identity and disabled hooks, so user signing settings cannot prompt
+  or fail the fixture commit.
 - Pester mocks do not cross process boundaries. Keep the preview subprocess
   explicitly on `-WhatIf`; do not assume parent-process package mocks protect it.
   No test may invoke a real installer or change the default editor profile.
+- Keep the inherited-pipe fixture real and self-terminating, with explicit child
+  cleanup in `finally`. Preserve the shared execution/output timeout deadline;
+  do not replace it with independent full timeouts for each stream. Process-tree
+  termination remains best effort and can add up to one second of cleanup time;
+  guaranteed cleanup of already-orphaned descendants is outside this migration.
 
 ## Migration stages and acceptance
 
-1. Record the current 15-scenario and full 23-scenario results on the supported
+1. Provision Pester 5.7.1 separately from test execution and verify exact-version
+   import on Windows PowerShell 5.1; the bundled Pester 3.4.0 is insufficient.
+   Freeze the current harness and relevant production/configuration files with
+   SHA-256 hashes and a retained harness snapshot before editing; record HEAD and
+   the existing working-tree changes without committing unrelated user work.
+   Record the current 17-scenario and full 25-scenario results on the supported
    Windows environment, including tool versions and local locked-source location.
-   Maintain the inventory above as the assertion-by-assertion parity checklist.
+   Add an assertion-level checklist mapping the frozen harness to the new tests;
+   the scenario summaries above alone do not establish assertion parity.
 2. Add Pester tests alongside the unchanged harness. Port safety scenarios first,
    then integration scenarios and their Lua invocation. Run old and new suites in
    separate processes with separate fixtures against the same locks and tools.
 3. Require every mapped scenario to pass in both implementations with no skipped
    required cases. Verify the new runner returns nonzero for a deliberately failed
    assertion and a setup error, restores the environment after failure, and emits
-   a usable report. Remove these temporary failure injections afterward.
+   a usable report. Keep repeatable runner contract tests using disposable failing,
+   setup-error, missing-scenario, skipped-scenario, and empty-suite fixtures;
+   keep failure injections out of the real suites.
 4. Convert the original entry point into the thin Pester runner only after parity
    is demonstrated. Remove the custom assertion/runner implementations and manual
    mock replacements. Update the README with the pinned development dependency,
    setup steps, suite prerequisites, unchanged commands, and report locations.
-   Record new execution evidence separately from historical Phase 1 validation.
+   Record new execution evidence separately from historical Phase 1 and Phase 2b
+   validation.
 5. Run both suite selections through the final entry point on Windows PowerShell
    5.1. Verify repository-tracked configuration/locks and the default profile remain
    unchanged. The migration is complete only when all inventory items and Lua
@@ -145,9 +192,11 @@ gate.
 
 - Preserve the Phase 2 assumption that configuration and plugin data are always
   on the same volume. Do not add cross-drive support or cross-drive tests.
-- The runtime-detection enhancement remains Phase 2 work. Preserve any regression
-  tests added for it before migration; do not change production detection merely
-  to adopt Pester. The 23-scenario inventory is the current minimum, not a ceiling.
+- Phase 2b completed runtime-detection and native-timeout fixes and strengthened
+  rollback/repeat-run assertions. Preserve that behavior and all its regressions;
+  do not change production detection merely to adopt Pester. The 25-scenario
+  inventory is the current minimum, not a ceiling. Phase 2 language tooling remains
+  separate work; rebase coverage if it changes the baseline before migration.
 - Actual installer/elevation/reboot behavior, real network interruption, and
   interactive rendering retain the acceptance limits documented in
   `compatibility/VALIDATION.md`. Historical download, Winget lookup, and health

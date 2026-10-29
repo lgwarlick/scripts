@@ -9,6 +9,10 @@ An empty configuration directory or simple `init.lua`/`init.vim` editor settings
 are supported. Existing plugin setups are outside this script's migration scope.
 Inspection is conservative and never executes existing configuration; unfamiliar
 files, directories, or plugin-loading statements cause an actionable stop.
+Existing standard runtime directories beneath the data directory's `site` are
+also rejected, including filetype scripts, Lua modules, syntax/indent scripts,
+parsers, and queries, even when the directories are empty. Move existing runtime
+content aside manually before deploying; the bootstrap does not migrate it.
 
 ## Run
 
@@ -133,6 +137,33 @@ this implementation. The committed baseline is checked against isolated Windows
 profiles; installer/elevation/reboot scenarios still require disposable-machine
 acceptance testing before release.
 
+[Phase 2b](Phase2b.md) records subsequent runtime-detection, native-timeout,
+rollback, and repeat-run checks. Native timeouts cover both process execution and
+output collection. Process-tree termination is best effort; descendants whose
+parent has already exited are not guaranteed to be terminated.
+
+Tests require **Pester 5.7.1** as a development dependency. Provision it separately
+from the repository directory; test execution never downloads or installs modules:
+
+```powershell
+Save-Module -Name Pester -RequiredVersion 5.7.1 -Path .validation/modules -Repository PSGallery
+```
+
+PowerShellGet may first request its NuGet provider. If an older PowerShellGet
+cannot provision it, download the exact module package into the same ignored
+workspace location instead:
+
+```powershell
+New-Item -ItemType Directory -Path .validation/modules -Force | Out-Null
+Invoke-WebRequest -UseBasicParsing -Uri https://www.powershellgallery.com/api/v2/package/Pester/5.7.1 -OutFile .validation/modules/Pester.5.7.1.zip
+Expand-Archive -LiteralPath .validation/modules/Pester.5.7.1.zip -DestinationPath .validation/modules/Pester/5.7.1 -Force
+```
+
+The runner imports exactly 5.7.1 from `.validation/modules` when present, otherwise
+from the normal module search path. The Windows-bundled Pester 3.4.0 is insufficient.
+These setup commands download development tooling; the bootstrap itself does not
+depend on Pester.
+
 ```powershell
 # Safety and recovery checks; writes disposable fixtures only under .validation.
 .\support\Test-Bootstrap.ps1
@@ -144,3 +175,25 @@ acceptance testing before release.
 The optional source directory must contain all thirteen repository checkouts named
 as in the lockfile. Integration checks simulate package presence and copy those
 checkouts; they never install software or touch the default editor profile.
+
+Both selections run sequentially in a fresh 64-bit Windows PowerShell 5.1 process
+without profiles. The default selection requires the supported Neovim executable;
+the integration selection also requires Git for Windows with GNU tar and curl,
+plus clean sources at the exact committed revisions and repository URLs. 7-Zip
+presence is simulated. Missing prerequisites fail the requested selection.
+
+There are 17 safety scenarios and eight optional integration scenarios, plus
+11 runner checks for exit codes, reports, literal arguments, pinned dependency
+errors, and teardown. The default selection runs 28 tests; the full selection
+runs 36. Unselected integration checks are announced explicitly. Every required
+scenario must run and pass; missing/skipped scenarios and discovery/setup errors
+produce a nonzero exit code.
+
+Each run prints its `.validation/p-<id>` artifact directory and writes
+`results.xml` in NUnit format. Prerequisite failures print setup/error details;
+failures before Pester starts may have no XML report. Pester's report exporter
+reads Windows OS metadata through CIM, which must be accessible to the test
+process. Fixtures and reports are retained for inspection. See
+[Phase 3](Phase3.md) and [assertion parity](compatibility/PHASE3-PARITY.md).
+Executed migration checks are recorded separately in
+[Phase 3 validation](compatibility/PHASE3-VALIDATION.md).

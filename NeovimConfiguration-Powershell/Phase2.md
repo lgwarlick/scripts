@@ -2,12 +2,11 @@
 
 ## Existing runtime detection
 
-`Assert-UnmanagedRuntime` currently checks `site/pack`, `site/plugin`,
-`site/ftdetect`, and `site/after`, but omits other executable runtime directories
-such as `site/ftplugin`. Validation confirmed that an existing
-`site/ftplugin/lua.lua` passes this check and executes when a Lua buffer opens
-through the generated configuration. Extend detection to cover executable
-runtime directories in Phase 2.
+Completed in [Phase 2b](Phase2b.md). The original check omitted executable runtime
+directories such as `site/ftplugin`, allowing an existing `lua.lua` to execute
+when a Lua buffer opened. Detection now guards the additional standard runtime
+directories, with isolated regression checks for preserved contents and junction
+rejection. The language-tooling work below remains planned.
 
 ## Deployment assumption
 
